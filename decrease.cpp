@@ -10,7 +10,6 @@
 #include<algorithm>
 #include<queue>
 #include<set>
-#include <numeric>
 #include<functional>
 #include "minist.h"
 using namespace std;
@@ -179,7 +178,211 @@ void Print(int s,int n)             //输出最短路径，s为源节点，n为总的节点数
 //		}
 //	}
 //}
-void Create_Min_Cost(Mat &pt, vector<list<Node>> &GraphAdj, min_Cost &min_heap)
+
+double cal_cost(Mat &pt, vector<list<Node>> &GraphAdj, int n, int m)
+{
+	Mat pt1, pt2,pt3;
+	double distance_1 = 0.0;
+	double distance_2 = 0.0;
+	double Sum_distance = 0.0;
+	for (auto iter = GraphAdj[m].begin(); iter != GraphAdj[m].end(); iter++)
+	{
+		if (iter->u != n)
+		{
+			
+			pt.row(n).copyTo(pt1);
+			pt.row(iter->u).copyTo(pt2);
+			pt.row(m).copyTo(pt3);
+			distance_1 = distance_node(pt1,pt3)+ iter->w;  //n与m相连的距离+m与m的连接点相连的距离
+			distance_2 = distance_node(pt1, pt2);          //n与m的连接点直接连的距离
+			Sum_distance += (distance_2 - distance_1)*(distance_2 - distance_1);
+		}
+	}
+	return Sum_distance;
+}
+void Decrease_node(Mat &pt, vector<list<Node>> &GraphAdj, vector<Cost_Distance> &min_heap)
+{
+	Mat pt1, pt2;
+	vector<int> index1;
+	vector<int> index2;
+	vector<list<Node>> result;
+	index1.assign(GraphAdj.size(), 0); //要删除点的序号
+	index2.assign(GraphAdj.size(), 0); //要保留点的序号
+	double distance;
+	double dis_cost;
+	double dis_cost1;
+	for (int i = 0; i < 200; i++)
+	{
+		int t = min_heap[0].node_i;   //要保留的点
+		int k = min_heap[0].node_j;   //要删除的点
+		//if (index1[k] == 1)
+		//{
+		//	min_heap.erase(min_heap.begin());
+		//	continue;
+		//}
+		index1[k] = 1;
+		index2[t] = 1;
+		pt.row(t).copyTo(pt2);
+		bool flag = true;
+		for (auto iter = GraphAdj[t].begin(); iter != GraphAdj[t].end(); iter++)
+		{
+			if (iter->u == k)
+			{
+				iter = GraphAdj[t].erase(iter);
+				break;
+			}
+		}
+		for (auto it = min_heap.begin(); it != min_heap.end(); )
+		{
+			if (it->node_j == k||it->node_i==k)
+			{
+				it = min_heap.erase(it);
+				continue;
+			}
+			it++;
+		}
+		for (auto iter = GraphAdj[k].begin(); iter != GraphAdj[k].end(); iter++)
+		{
+			pt.row(iter->u).copyTo(pt1);
+			distance = distance_node(pt1, pt2);
+			
+			for (auto iter1 = GraphAdj[t].begin(); iter1 != GraphAdj[t].end(); iter1++)   //防止重复插入
+			{
+				flag = true;
+				if (iter1->u == iter->u||iter->u==t)
+				{
+					flag = false;
+					break;
+				}
+			}
+			if (flag == true)
+			{
+				GraphAdj[t].push_back(Node(iter->u, distance));
+				GraphAdj[iter->u].push_back(Node(t, distance));
+				dis_cost = cal_cost(pt, GraphAdj,t,iter->u);
+				dis_cost1 = cal_cost(pt, GraphAdj, iter->u, t);
+				for (auto iter2 = min_heap.begin(); iter2 != min_heap.end(); iter2++)
+				{
+					
+					if (iter2->cost_distance <= dis_cost)
+						continue;
+					else
+					{
+						iter2 = min_heap.insert(iter2, Cost_Distance(t, iter->u, dis_cost));
+						break;
+					}
+				}
+				for (auto iter2 = min_heap.begin(); iter2 != min_heap.end(); iter2++)
+				{
+
+					if (iter2->cost_distance <= dis_cost1)
+						continue;
+					else
+					{
+						iter2 = min_heap.insert(iter2, Cost_Distance(iter->u, t, dis_cost1));
+						break;
+					}
+				}
+			}
+		}
+	}
+	for (int i = 0; i < GraphAdj.size(); i++)
+	{
+		if (index1[i] == 1)
+		{
+			index2[i] = 0;
+		}
+	}
+	for (int i = 0,j=0; i < GraphAdj.size(); i++)
+	{
+		if (index2[i] == 1)
+		{
+			cout << i << " : ";
+			result.push_back(GraphAdj[i]);
+			for (auto iter = result[j].begin(); iter != result[j].end(); iter++)
+			{
+				if (iter->u != NULL)
+				{
+					cout << iter->u << " ";
+				}
+			}
+			cout << endl;
+			j = j + 1;
+		}
+	}
+	cout << min_heap.size() << endl;
+}
+
+void Heapadjust(vector<Cost_Distance> &heap, int currentPos,int end)//建立最小堆
+{
+	int i = currentPos, j = 2 * i;
+	Cost_Distance temp = heap[i];
+	while (j <= end)
+	{
+		if (j < end&&heap[j].cost_distance > heap[j+1].cost_distance)
+			++j;
+		if (temp.cost_distance <= heap[j].cost_distance)
+			break;
+        heap[i] = heap[j];
+		i = j;
+		j = j * 2;
+	}
+	heap[i] = temp;
+}
+void swap(vector<Cost_Distance> &heap, int i, int j)// 输出最小堆时使用的交换程序
+{
+	Cost_Distance temp = heap[i];
+	heap[i] = heap[j];
+	heap[j] = temp;
+}
+void Create_minheap(Mat &pt, vector<list<Node>> &GraphAdj,vector<Cost_Distance> &heap_final)//建立最小堆
+{
+	Mat pt1, pt2;
+	vector<Cost_Distance> heap;
+	heap.push_back(Cost_Distance(0,0,0));
+	for (int i = 0; i < GraphAdj.size(); i++)
+	{
+
+		double distance_1 = 0.0;    //i与j联通的点的间接距离
+		double distance_2 = 0.0;    //i与j联通的点的直接距离
+		for (auto iter = GraphAdj[i].begin(); iter != GraphAdj[i].end(); iter++)
+		{
+			double Sum_distance = 0.0;
+			for (auto iter1 = GraphAdj[iter->u].begin(); iter1 != GraphAdj[iter->u].end(); iter1++)
+			{
+				if (iter1->u != i)
+				{
+					distance_1 = iter->w + iter1->w;
+					pt.row(i).copyTo(pt1);
+					pt.row(iter1->u).copyTo(pt2);
+					distance_2 = distance_node(pt1, pt2);
+					Sum_distance += (distance_2 - distance_1)*(distance_2 - distance_1);
+				}
+			}
+			heap.push_back(Cost_Distance(i, iter->u, Sum_distance));
+		}
+	}
+	int k = heap.size()-1;
+	int currentPos = k / 2;
+	while (currentPos > 0)
+	{
+		Heapadjust(heap, currentPos, k);
+		--currentPos;
+	}
+	for (int i = k; i>0; i--)
+	{	
+		swap(heap, 1, i);
+		heap_final.push_back(heap[i]);
+		Heapadjust(heap, 1, i - 1);
+	}
+	//for (int i = 0; i < 5; i++)
+	//{
+	//	cout << heap_final[i].node_i << " " << heap_final[i].node_j << " " << heap_final[i].cost_distance;
+	//	cout << endl;
+	//}
+	//cout << heap_final.size()<<endl;
+}
+void Create_Min_Cost(Mat &pt, vector<list<Node>> &GraphAdj, min_Cost &min_heap)//建立优先级队列
 {
 	Mat pt1, pt2;
 	for (int i = 0; i < GraphAdj.size(); i++)
@@ -205,83 +408,11 @@ void Create_Min_Cost(Mat &pt, vector<list<Node>> &GraphAdj, min_Cost &min_heap)
 			}
 	}
 }
-void Decrease_node(Mat &pt, vector<list<Node>> &GraphAdj, min_Cost &min_heap)
-{
-	Mat pt1, pt2;
-	vector<int> index1;
-	vector<int> index2;
-	vector<list<Node>> result;
-	index1.assign(GraphAdj.size(), 0);
-	index2.assign(GraphAdj.size(), 0);
-	double distance;
-	for (int i = 0; i < 5; i++)
-	{
-		int t = min_heap.top().node_i;   //要保留的点
-		int k = min_heap.top().node_j;   //要删除的点
-		if (index1[k] == 1)
-		{
-			min_heap.pop();
-			continue;
-		}
-		index1[k] = 1;
-		index2[t] = 1;
-		pt.row(t).copyTo(pt2);
-		bool flag = true;
-		for (auto iter = GraphAdj[k].begin(); iter != GraphAdj[k].end(); iter++)
-		{
-			pt.row(iter->u).copyTo(pt1);
-			distance = distance_node(pt1, pt2);
-			for (auto iter1 = GraphAdj[t].begin(); iter1 != GraphAdj[t].end(); iter1++)
-			{
-				if (iter1->u == iter->u)
-				{
-					flag == false;
-				}
-			}
-			if (flag == true)
-			{
-				GraphAdj[t].push_back(Node(iter->u, distance));
-				GraphAdj[iter->u].push_back(Node(t, distance));
-			}
-		}
-		/*int sum = accumulate(index1.begin(), index2.end(), 0);
-		if (sum >= 300)
-		{
-			break;
-		}*/
-		min_heap.pop();
-	}
-	for (int i = 0; i < GraphAdj.size(); i++)
-	{
-		if (index1[i] == 1)
-		{
-			index2[i] = 0;
-		}
-	}
-	for (int i = 0; i < GraphAdj.size(); i++)
-	{
-		if (index2[i] == 1)
-		{
-			cout << i << endl;
-			result.push_back(GraphAdj[i]);
-		}
-	}
-	for (int i = 0; i < 5; i++) {
-		for (auto iter = result[i].begin(); iter != result[i].end(); iter++)
-		{
-			if (iter ->u != NULL)
-			{
-				cout << iter->u << " ";
-			}
-		}
-		cout << endl;
-	}
-}
 int main()
 {
 
-	string infileImageTrain("D:\\code\\knn-decrease\\MINIST\\train-images.idx3-ubyte");
-	string infileLabTrain("D:\\code\\knn-decrease\\MINIST\\train-labels.idx1-ubyte");
+	string infileImageTrain("C:\\Users\\lab309\\Desktop\\MINIST\\train-images.idx3-ubyte");
+	string infileLabTrain("C:\\Users\\lab309\\Desktop\\MINIST\\train-labels.idx1-ubyte");
 	Mat digitsUcharTrain;
 	Mat lableIntTrain;
 	MNIST mmt;
@@ -292,8 +423,8 @@ int main()
 
 	digitsUcharTrain.convertTo(digitsImageTrain, CV_64FC1);
 
-	string infileImageTest("D:\\code\\knn-decrease\\MINIST\\t10k-images.idx3-ubyte");
-	string infileLabTest("D:\\code\\knn-decrease\\MINIST\\t10k-labels.idx1-ubyte");
+	string infileImageTest("C:\\Users\\lab309\\Desktop\\MINIST\\t10k-images.idx3-ubyte");
+	string infileLabTest("C:\\Users\\lab309\\Desktop\\MINIST\\t10k-labels.idx1-ubyte");
 
 	Mat digitsUcharTest;
 	Mat lableIntTest;
@@ -302,7 +433,7 @@ int main()
 	Mat digitsImageTest;
 
 	digitsUcharTest.convertTo(digitsImageTest, CV_64FC1);
-	string file_name = "D:\\code\\knn-decrease\\MINIST\\pcaValue6000.xml";
+	string file_name = "C:\\Users\\lab309\\Desktop\\MINIST\\pcaValue6000.xml";
 	//PCA pca(digitsImageTrain, cv::Mat(), CV_PCA_DATA_AS_ROW, low_dimension);
 	//savePCA(file_name.c_str(), pca);
 	PCA pca;
@@ -312,8 +443,8 @@ int main()
 	//point.row(0).copyTo(pt1);
 	//point.row(49).copyTo(pt2);
 	//double res = distance_node(pt1, pt2);
-	ifstream test("D:\\code\\knn-decrease\\MINIST\\knneartest600", ifstream::in);
-	ofstream result("D:\\code\\knn-decrease\\MINIST\\knneartest600-cost", ofstream::out);
+	ifstream test("C:\\Users\\lab309\\Desktop\\MINIST\\knneartest600", ifstream::in);
+	ofstream result("C:\\Users\\lab309\\Desktop\\MINIST\\knneartest600-cost", ofstream::out);
 	vector<int>  index;
 	vector<vector<int>> knn;
 	vector<vector<double>> knndistance;
@@ -375,24 +506,31 @@ int main()
 			}
 		}
 	}
-	
-	min_Cost min_heap;
-	Create_Min_Cost(point, Adj,min_heap);
-	Decrease_node(point, Adj, min_heap);
-	/*for (int i = 0; i < 5; i++) {
-		for (auto iter = Adj[i].begin(); iter != Adj[i].end(); iter++)
-			cout << iter->u << " ";
+	/*for (int i = 0; i < 50; i++){
+		for (auto iter = Adj[i].begin(); iter != Adj[i].end(); iter++)    
+			cout <<iter->u <<" ";
 		cout << endl;
 	}*/
-	/*cout << min_heap.size() << endl;
-	for (int i = 0; i < min_heap.size(); i++)
+	vector<Cost_Distance> heap_final;
+	Create_minheap(point, Adj,heap_final);
+//	min_Cost min_heap;
+//	Create_Min_Cost(point, Adj,min_heap);
+	Decrease_node(point, Adj, heap_final);
+//	cout << min_heap.size() << endl;
+	/*for (int i = 0; i < min_heap.size(); i++)
 	{
 		result << min_heap.top().node_i << " " << min_heap.top().node_j << " " << min_heap.top().cost_distance;
 		result << endl;
+		min_heap.pop();
+	}*/
+	/*for (int i = 0; i < 5; i++)
+	{
+		cout << min_heap.top().node_i << " " << min_heap.top().node_j << " " << min_heap.top().cost_distance;
+		cout << endl;
 		min_heap.pop();
 	}*/
 	//Dijstra(Adj, 0);
 	//Print(0, Adj.size());
 	system("pause");
 	return 0;
-}
+}					
